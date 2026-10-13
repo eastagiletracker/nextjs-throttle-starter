@@ -10,6 +10,7 @@ import {
   addCartItems,
   createCart,
   getCart,
+  setCartCustomer,
   setCartShippingAddress,
 } from "./cart"
 import { cancelCheckoutSession, createCartBackedSession } from "./sessions"
@@ -54,6 +55,7 @@ export const throttleCheckoutProvider: CheckoutProvider = {
       email: string
       shippingAddress?: Address
       throttleCartId?: string
+      throttleCustomerId?: string
       returnUrl?: string
       cancelUrl?: string
     }
@@ -63,6 +65,9 @@ export const throttleCheckoutProvider: CheckoutProvider = {
     }
 
     const shippingAddress = toThrottleAddress(customer?.shippingAddress)
+    // Signed-in buyer's Throttle customer. Linking the cart to it is what puts
+    // the resulting order in their order history; guests leave it unset.
+    const customerId = customer?.throttleCustomerId
 
     // Reuse the cart the buyer's been adding to all session if the
     // client passed it; only fall back to building from local items
@@ -79,10 +84,16 @@ export const throttleCheckoutProvider: CheckoutProvider = {
         if (shippingAddress) {
           await setCartShippingAddress(throttleCartId, shippingAddress)
         }
+        // Usually built before the buyer signed in, so the cart is not linked
+        // to their customer yet.
+        if (customerId) {
+          await setCartCustomer(throttleCartId, customerId)
+        }
       } else {
         // Cart went away or already converted; build a fresh one.
         const fresh = await createCart({
           externalId: cart.id,
+          customerId,
           customerEmail: customer.email,
           shippingAddress,
         })
@@ -105,6 +116,7 @@ export const throttleCheckoutProvider: CheckoutProvider = {
     } else {
       const throttleCart = await createCart({
         externalId: cart.id,
+        customerId,
         customerEmail: customer?.email,
         shippingAddress,
       })

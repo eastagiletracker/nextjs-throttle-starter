@@ -344,6 +344,9 @@ export interface CheckoutProvider {
       shippingAddress?: Address
       /** Optional engine-specific cart id (e.g. Throttle cart UUID) to reuse. */
       throttleCartId?: string
+      /** Engine customer id of the signed-in buyer, resolved server-side from
+       *  the auth session (never the request body). Absent for guests. */
+      throttleCustomerId?: string
       /** Storefront URLs the checkout session returns to (engine may require). */
       returnUrl?: string
       cancelUrl?: string

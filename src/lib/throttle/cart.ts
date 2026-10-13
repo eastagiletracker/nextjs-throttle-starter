@@ -81,6 +81,9 @@ function toCartAddressPayload(addr: ThrottleAddress): CartAddress {
 
 export interface CreateCartInput {
   externalId?: string
+  /** Throttle customer the cart (and the order it becomes) belongs to. Take
+   *  it from the authenticated session, never from the request body. */
+  customerId?: string
   customerEmail?: string
   shippingAddress?: ThrottleAddress
   billingAddress?: ThrottleAddress
@@ -94,6 +97,7 @@ export async function createCart(input: CreateCartInput = {}): Promise<ThrottleC
     getCartClient().carts.create({
       applicationId: requireStoreId(),
       currency: "USD",
+      ...(input.customerId ? { customerId: input.customerId } : {}),
       metadata: {
         ...(input.externalId ? { externalId: input.externalId } : {}),
         ...(input.customerEmail ? { customerEmail: input.customerEmail } : {}),
@@ -133,6 +137,20 @@ export async function setCartShippingAddress(
       shippingAddress: toCartAddressPayload(shippingAddress),
     })
   )
+}
+
+/**
+ * Link an existing cart to a Throttle customer, so the order it becomes on
+ * payment carries the customer and shows up in that buyer's order history
+ * (`listOrders({ customerId })`). The buyer usually builds the cart before
+ * signing in, so this runs at checkout rather than at cart creation. The id
+ * must come from the authenticated session, never from the request body.
+ */
+export async function setCartCustomer(
+  cartId: string,
+  customerId: string
+): Promise<void> {
+  await callThrottle(() => getCartClient().carts.update(cartId, { customerId }))
 }
 
 export interface AddCartItemInput {

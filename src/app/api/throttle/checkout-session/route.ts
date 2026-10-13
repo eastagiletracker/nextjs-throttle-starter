@@ -86,6 +86,21 @@ export async function POST(req: NextRequest) {
     itemCount,
   }
 
+  // The signed-in buyer's Throttle customer, if any. It links the cart, and so
+  // the order it becomes, to their account — without it the order never shows
+  // up in /account/orders. Taken from the auth session, never the request
+  // body, so a caller can't attach an order to someone else's customer. A
+  // failure here degrades to a guest checkout rather than blocking payment.
+  let throttleCustomerId: string | undefined
+  if (isClerkConfigured) {
+    try {
+      const user = await authProvider.getCurrentUser()
+      throttleCustomerId = user?.throttleCustomerId
+    } catch (err) {
+      console.warn("[throttle] checkout customer lookup failed; continuing as guest:", err)
+    }
+  }
+
   try {
     const origin = req.nextUrl.origin
     const session = await checkoutProvider.createSession(cart, {
@@ -97,6 +112,7 @@ export async function POST(req: NextRequest) {
         isDefault: true,
       },
       throttleCartId: parsed.data.throttleCartId,
+      throttleCustomerId,
       returnUrl: `${origin}/checkout/success`,
       cancelUrl: `${origin}/checkout`,
     })
@@ -106,13 +122,12 @@ export async function POST(req: NextRequest) {
     // checkout latency), best-effort, and only for signed-in buyers —
     // the customer id comes from the session, never the request body,
     // so a guest can't write to someone else's customer.
-    if (isClerkConfigured) {
+    if (throttleCustomerId) {
+      const customerId = throttleCustomerId
       const shippingAddress = parsed.data.customer.shippingAddress
       after(async () => {
         try {
-          const user = await authProvider.getCurrentUser()
-          if (!user?.throttleCustomerId) return
-          await saveAddressIfNew(user.throttleCustomerId, {
+          await saveAddressIfNew(customerId, {
             firstName: shippingAddress.firstName,
             lastName: shippingAddress.lastName,
             line1: shippingAddress.line1,
